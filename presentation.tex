@@ -1,0 +1,286 @@
+% https://europroofnet.github.io/wg5-vienna24/
+
+\documentclass{ctuslides}
+
+\setbeameroption{show notes}
+
+\usepackage{appendixnumberbeamer}
+\usepackage{csquotes}
+\usepackage[pdf]{graphviz}
+\usepackage[detect-weight=true]{siunitx}
+
+\usepackage{newverbs}
+% https://www.cvut.cz/logo-a-graficky-manual
+% Pantone 300: 0065BD
+% Pantone 284: 6AADE4
+% ctustyle.sty
+%\definecolor{ctubluelight}{HTML}{1478C7}
+%\definecolor{ctubluedark}{HTML}{0065BD}
+%\Verbdef\NodeStylePrediction{fillcolor="#1478C7", fontcolor=white}
+% (white + 6AADE4) / 2
+\Verbdef\NodeStylePrediction{fillcolor="#B4D6F1"}
+
+% hyperref should be loaded as late as possible.
+%\usepackage{hyperref}
+\hypersetup{
+pdftitle={Learning to Rank in Automatic Theorem Proving},
+pdfauthor={Filip Bártek, Martin Suda}
+}
+%\hypersetup{hidelinks}
+
+% glossaries must be loaded after hyperref
+\input{glossary}
+\glsdisablehyper
+
+\newcommand{\email}[1]{\href{mailto:#1}{\texttt{#1}}}
+
+\title{Learning to Rank in Automatic Theorem Proving}
+\author[\underline{Filip Bártek}, Martin Suda]{\underline{Filip Bártek} (\email{filip.bartek@cvut.cz}), Martin Suda}
+\institute{\Acrlong{ctu}}
+\year=2024
+\month=3
+\day=25
+\date{\today}
+
+\DeclareMathOperator{\sigmoid}{sigmoid}
+\DeclareMathOperator{\softplus}{softplus}
+\DeclareMathOperator{\Bernoulli}{Bernoulli}
+\newcommand{\R}{\mathbb{R}}
+
+\newcommand{\source}[1]{\tiny Credit: #1}
+
+\begin{document}
+
+\ctutitleframe
+
+\begin{frame}{Motivation: Clause selection}
+\note{Context: Saturation-based automatic theorem proving, Vampire
+
+Clause selection can be reduced to clause ranking.}
+\begin{itemize}
+\item Goal: Train a \emph{clause selection model}
+\begin{itemize}
+\item Input: Set of clauses
+\item Output (one of):
+\begin{enumerate}
+\item Labeling of the input clauses (positive, negative)
+\item Best of the input clauses
+\item \emph{Ranking of the input clauses}
+\end{enumerate}
+\end{itemize}
+\item Training data (one of):
+\begin{enumerate}
+\item Clauses with labels (positive, negative)
+\item Set of proof derivations.
+Each proof derivation is a set of clauses with labels (positive, negative).
+\item \emph{Pairs of clauses $C_+, C_-$ such that $C_+$ should be selected before $C_-$}
+\end{enumerate}
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Learning to rank: Pairwise approach}
+\begin{itemize}
+\item Goal: Train a \emph{ranking model}
+\begin{itemize}
+\item Input: Set of items (samples, documents) $D$
+\item Output: Ranking (permutation) over $D$
+\end{itemize}
+\item Training example:
+Pair of items $(i, j)$ such that $i$ is to be ranked higher than $j$% ($i \triangleright j$)
+\item Main application domain: Recommender systems
+\end{itemize}
+\end{frame}
+
+\section{RankNet}
+
+\begin{frame}{RankNet}
+\nocite{DBLP:conf/icml/BurgesSRLDHH05}
+\begin{columns}
+\column{0.5\textwidth}
+\input{gv/RankNet}
+\note{$\sigma$ is the logistic function (also known as the sigmoid), an example of a sigmoid function.
+
+$$\sigma(o_{ij}) = \frac{e^{o_{ij}}}{1 + e^{o_{ij}}} = \frac{1}{1 + e^{-o_{ij}}}$$}
+\note{$T_{ij} > 0.5$ means:
+$i$ should be ranked higher than $j$;% ($i \triangleright j$)
+$o_i$ should be greater than $o_j$;
+$o_{ij}$ should be greater than 0;
+$P_{ij}$ should be greater than $0.5$.
+
+Ranking a set of items amounts to ordering them by their scores $o_i$.
+
+By design, the relation $R$ defined by \enquote{$iRj \iff P_{ij} \geq 0.5 \iff f(\mathbf{x}_i)$} is a total order.
+
+$$P_{ij} \geq 0.5 \iff o_{ij} \geq 0 \iff o_i \geq o_j \iff f(\mathbf{x}_i) \geq f(\mathbf{x}_j)$$
+
+Loss gradient can backpropagate from $C_{ij}$ to $f$.
+$C_{ij}$ is differentiable with respect to $f$.
+We can use gradient descent to train $f$.
+
+RankNet loss is (binary) cross-entropy of true distribution $\Bernoulli(T_{ij})$ and estimated distribution $\Bernoulli(\sigma(o_{ij}))$.}
+\column{0.5\textwidth}
+\vspace{3cm}
+$$\sigma(o_{ij}) = \frac{e^{o_{ij}}}{1 + e^{o_{ij}}}$$
+\end{columns}
+\end{frame}
+
+\begin{frame}{RankNet loss as a function of $o_i - o_j$}
+\centering
+\includegraphics[scale=1, page=4, clip, trim=1.5cm 19cm 12cm 2.5cm]{references/RankNet}
+
+\source{Burges et al. Learning to rank using gradient descent. ICML 2005. \nocite{DBLP:conf/icml/BurgesSRLDHH05}}
+\note{Binary cross-entropy: $-T \log P - (1 - T) \log (1 - P)$}
+\end{frame}
+
+\begin{frame}{RankNet with $T_{ij} = 1$}
+\begin{columns}
+\column{0.5\textwidth}
+\centering
+\input{gv/RankNet1}
+\column{0.5\textwidth}
+\vspace{5cm}
+$$C_{ij} = \log (1 + e^{o_j - o_i})$$
+\end{columns}
+\note{$$C_{ij} = - \log P_{ij} = \log (1 + e^{o_j - o_i})$$
+
+$$o_i \geq o_j \iff P_{ij} \geq 0.5 \iff C_{ij} \leq \log 2 \approx 0.69$$}
+\end{frame}
+
+\begin{frame}{Symbol weight recommender}
+\nocite{DBLP:conf/lpar/Bartek023}
+\begin{columns}
+\column{0.5\textwidth}
+\centering
+\only<1>{\input{gv/RankNetWeightTrain}}
+\only<2>{\input{gv/RankNetWeightPredict}}
+\column{0.5\textwidth}
+$$\softplus(x) = \log(1 + e^x)$$
+\vspace{2.5cm}
+\end{columns}
+
+\note{Output activation $1 + \softplus(x) = 1 + \log(1 + e^x)$ ensures that each symbol weight is $\geq 1$.
+\begin{itemize}
+\item Ensures fairness of the selection (\enquote{no clause waits forever})
+\item Empirically superior to $0.1 + \softplus(x)$, $\softplus(x)$ and $x$
+\item Conservative modification of the standard symbol weight $1$
+\end{itemize}
+
+Proxy task
+
+Bártek, Suda. A GNN-Advised Clause Selection. LPAR 2023. \cite{DBLP:conf/lpar/Bartek023}
+\begin{itemize}
+\item ATP: Vampire
+\item Problems: TPTP FOF and CNF
+\item GNN queried as a preprocessing step
+\item Symbol weights include 1 variable weight and 1 equality weight.
+\item Training data: Positives are proof clauses, negatives are selected non-proof clauses.
+\item Test performance: 1494/3149 proofs found. Baseline: 1402. Improvement: \SI{6.6}{\percent}.
+\item Observation: Variable weight should be relatively small.
+\end{itemize}}
+\end{frame}
+
+\begin{frame}{Symbol precedence recommender}
+\nocite{DBLP:conf/cade/Bartek021}
+\centering
+\input{gv/RankNetPrecedence}
+
+\note{Symbol precedence instantiates (configures) simplification ordering on terms (KBO or LPO),
+which in turn constrains the application of generating rules in superposition calculus.
+
+Bártek, Suda. Neural Precedence Recommender. CADE 2021. \cite{DBLP:conf/cade/Bartek021}
+\begin{itemize}
+\item Validation performance: Val problems: 7648. Mean solved (5 repeats): \num{3951.6}. Improvement over baseline (\texttt{frequency} heuristic): \SI{4.8}{\percent}.
+\item Baseline (\texttt{frequency}) prefers symbols with many occurrences.
+\end{itemize}}
+\end{frame}
+
+\begin{frame}{Conclusion}
+Tasks suitable for RankNet:
+\begin{itemize}
+\item Goal: Rank a set of items or get a top-ranked item
+\item Training data: Ranked pairs of items
+\end{itemize}
+\pause
+Future work with RankNet:
+\begin{itemize}
+\item Clause selection:
+\begin{itemize}
+\item Train a full NN clause ranking model to be queried at runtime
+\item Generalize symbol counting clause weight to a RNN on term structure
+\item Optimize symbol weights on problems with a common signature,
+use logistic regression instead of gradient descent
+\end{itemize}
+\item Simplification ordering on terms: Train KBO symbol weight jointly with precedence
+\item Stress top-ranked items more when training
+\end{itemize}
+\pause
+\note{Papers:
+\begin{itemize}
+\item A GNN-Advised Clause Selection. LPAR 2023. [symbol weight recommender]
+\item Neural Precedence Recommender. CADE 2021.
+\end{itemize}}
+\centering
+\textbf{Thank you for your attention!}
+\end{frame}
+
+\appendix
+
+\begin{frame}[plain]
+% https://tex.stackexchange.com/a/178803/202639
+\begin{beamercolorbox}[center]{title}
+\usebeamerfont{title}Appendix
+\end{beamercolorbox}
+\end{frame}
+
+\begin{frame}[allowframebreaks]{References}
+\bibliographystyle{plain}
+\tiny
+\bibliography{main}
+\end{frame}
+
+\begin{frame}{DirectRanker}
+\centering
+\includegraphics[scale=0.9, page=5, clip, trim=1.5cm 14cm 1.5cm 1.5cm]{references/DirectRanker}
+
+\source{K{\"{o}}ppel et al. \cite{DBLP:conf/pkdd/KoppelSWPK019}}
+\end{frame}
+
+\begin{frame}{RankNet}
+Training example: Pair of items $i, j$ and target probability $\bar{P}_{ij}$ of \enquote{$i \triangleright j$}
+
+Loss function:
+\begin{itemize}
+\item $o_i = f(i)$ \ldots score of item $i$
+\item $o_{ij} = o_i - o_j$ \ldots score of pair of items $i, j$
+\item $P_{ij} = \sigma(o_{ij}) = \frac{e^{o_{ij}}}{1 + e^{o_{ij}}}$ \ldots predicted probability of \enquote{$i \triangleright j$}
+\note{$\sigma$ is the logistic function (also known as the sigmoid), an example of a sigmoid function.
+
+$$\sigma(o_{ij}) = \frac{e^{o_{ij}}}{1 + e^{o_{ij}}} = \frac{1}{1 + e^{-o_{ij}}}$$}
+\item $C_{ij} = -\bar{P}_{ij} \log P_{ij} - (1 - \bar{P}_{ij}) \log (1 - P_{ij}) = -\bar{P}_{ij} o_{ij} + \log (1 + e^{o_{ij}})$ \ldots binary cross-entropy loss
+\end{itemize}
+
+Properties: reflexive ($o_{ii} = 0$), antisymmetric ($o_{ij} = -o_{ji}$), transitive ($o_{ij} \geq 0 \land o_{jk} \geq 0 \implies o_{ik} \geq 0$)
+\end{frame}
+
+\begin{frame}{Symbol precedence recommender: Overview}
+\centering
+\input{gv/SymbolPrecedenceRecommender}
+\end{frame}
+
+\begin{frame}{Symbol weight recommender: Overview}
+\centering
+\input{gv/SymbolWeightRecommender}
+\note{This is an instance of RankNet. We are learning symbol weights to rank clauses. The clause ranking task is a mere proxy task.
+
+The scale of influence of the recommender is small, since it does not evaluate the passive clauses themselves, but only the symbol weights.
+This is compensated by the computational cheapness:
+The recommender is only evaluated once in the beginning of the proof search,
+and there is virtually no overhead over standard weight-based selection.
+
+Note the output activation function.
+It ensures a positive lower bound on the symbol weights.
+This in turn ensures fairness of the selection.
+Negative symbol weights tend to lead to useless attractors.}
+\end{frame}
+
+\end{document}

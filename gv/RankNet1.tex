@@ -1,0 +1,27 @@
+\digraph[scale=0.5]{RankNet1}{
+graph [splines=ortho, ranksep=0.25, margin=0];
+node [shape=record, fontsize=14, width=0, height=0];
+subgraph cluster_input {
+label=<Training example "<i>i</i> should be ranked higher than <i>j</i>">;
+margin=10;
+style=dashed;
+rank=same;
+SampleI [label=<<i><b>x</b><sub>i</sub></i>|Item <i>i</i>>];
+SampleJ [label=<<i><b>x</b><sub>j</sub></i>|Item <i>j</i>>];
+}
+Model [label=<<i>f</i>|Score model (NN)>];
+ScoreI [label=<{<i>o<sub>i</sub> = f(<b>x</b><sub>i</sub>)</i>|Score of item <i>i</i>}>];
+ScoreJ [label=<{<i>o<sub>j</sub> = f(<b>x</b><sub>j</sub>)</i>|Score of item <i>j</i>}>];
+ScorePair [label=<{<i>o<sub>ij</sub> = o<sub>i</sub> &minus; o<sub>j</sub></i>|Score of example <i>(i, j)</i>}>];
+Prob [label=<{<i>P<sub>ij</sub> = &sigma;(o<sub>ij</sub>)</i>|Estimated probability of "<i>i</i> should be ranked higher than <i>j</i>"}>];
+Loss [label=<{<i>C<sub>ij</sub> = BCE(P<sub>ij</sub>, 1) = &minus; log P<sub>ij</sub></i>|Binary cross-entropy loss}>];
+SampleI -> Model [style="invis"];
+SampleJ -> Model [style="invis"];
+SampleI -> ScoreI;
+SampleJ -> ScoreJ;
+ScoreI -> ScorePair [penwidth=3];
+ScoreJ -> ScorePair [penwidth=3];
+Model -> ScoreI [penwidth=3];
+Model -> ScoreJ [penwidth=3];
+ScorePair -> Prob -> Loss [penwidth=3];
+}
