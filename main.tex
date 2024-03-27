@@ -1,0 +1,99 @@
+% https://europroofnet.github.io/wg5-vienna24/
+
+\documentclass{easychair}
+
+\usepackage{csquotes}
+\usepackage{todonotes}
+
+\usepackage[detect-weight=true,binary-units=true]{siunitx}
+\newcommand{\pc}[1]{\SI[round-mode=places,round-precision=1]{#1}{\percent}}
+
+% hyperref should be loaded as late as possible.
+%\usepackage{hyperref}
+\hypersetup{
+pdftitle={Learning to Rank in Automatic Theorem Proving},
+pdfauthor={Filip Bártek}
+}
+%\hypersetup{hidelinks}
+
+% glossaries must be loaded after hyperref
+\input{glossary}
+\glsdisablehyper
+
+\title{Learning to Rank in Automatic Theorem Proving}
+
+\author{Filip Bártek}
+
+\institute{\href{https://www.cvut.cz/}{\acrlong{ctu}}, Czech Republic\\
+\email{filip.bartek@cvut.cz}}
+
+\authorrunning{Bártek}
+\titlerunning{Learning to Rank in Automatic Theorem Proving}
+
+\begin{document}
+
+\maketitle
+
+In saturation-based \gls{atping},
+clause selection is a crucial heuristic decision point.
+\Glspl{nn} have been successfully trained to aid the proof search by approximately prioritizing clauses
+%that ultimately compound a proof \cite{DBLP:conf/lpar/Bartek023}.
+in a way that leads to a quick derivation of a proof \cite{DBLP:conf/lpar/Bartek023,DBLP:conf/cade/JakubuvCOP0U20,DBLP:conf/cade/ChvalovskyJ0U19,DBLP:conf/cade/000121a,DBLP:conf/lpar/ChvalovskyKPU23}.
+% Note: DBLP:conf/lpar/ChvalovskyKPU23 is not saturation-based - it is iProver.
+Typically, such a \gls{nn} is trained on a set of clauses that were derived in successful proof searches.
+% They were actually _activated_, not only derived.
+The clauses are labeled: \emph{Positive} clauses have contributed to a proof, while \emph{negative} clauses have not.
+A straightforward approach trains a neural classifier of clauses \cite{DBLP:conf/cade/JakubuvCOP0U20,DBLP:conf/cade/000121a}.
+We motivate an alternative approach based on classification of clause \emph{pairs} by two observations:
+
+\begin{enumerate}
+\item
+The training data in the form of labeled clauses
+can be interpreted as a specification of a \emph{relative} preference over clauses:
+Each positive clause in a proof search is preferred over each negative clause in the same proof search.
+Specifying pairwise preference relation over clauses opens up the possibility of using finer-grained training data
+that only compares pairs of causes that belonged to a passive set simultaneously --
+we no longer have to consider every positive competing against every negative.
+
+\item
+The final output of a clause selection heuristic is one clause from a passive set,
+rather than a partition of the passive set into positive and negative sets.
+Standard clause selection heuristics order the clauses by a heuristic weight
+(for example, derivation tree size or number of symbol occurrences in the clause)
+and prioritize clauses with the lowest weight.
+Similarly, we may prefer our \gls{nn} to assign weights to clauses in such a way that
+the clauses with relatively small weights should be selected early.
+\end{enumerate}
+
+\emph{Learning to rank} is the machine learning task of training a ranking model --
+a system that ranks an arbitrary set of objects (e.g., clauses).
+The training data is typically supplied in the form of a partial order on a set of objects.
+\emph{RankNet} \cite{DBLP:conf/icml/BurgesSRLDHH05}
+%(later generalized to DirectRanker \cite{DBLP:conf/pkdd/KoppelSWPK019})
+introduces a design of the loss function and the last layer of the \gls{nn}
+that allows training the \gls{nn} to rank arbitrary objects represented by feature vectors.
+
+To train a clause selection heuristic in a RankNet-based approach,
+I trained a classifier of \emph{clause pairs} $C_+, C_-$ that estimates whether $C_+$ is more useful than $C_-$
+when these two clauses compete for selection in a proof search \cite{DBLP:conf/lpar/Bartek023}.
+The \gls{nn} predicts an intermediate weight $w(C)$ for each clause $C$.
+$w(C_+) < w(C_-)$ signifies that $C_+$ is estimated to be more useful than $C_-$,
+so ranking a set of clauses amounts to sorting the clauses by their predicted weights.
+
+This design allowed me to define $w$ as a weighted sum of symbol weights constrained to be greater than 1.
+The resulting clause weight was a pragmatic conservative modification of the popular symbol counting clause weight.
+Defining clause weight in this way would be non-trivial if the \gls{nn} was trained as a clause classifier,
+while the RankNet design accommodates such definition naturally.
+
+%I used the trained clause weights to guide proof search in Vampire, solving \pc{6.6} more problems than a baseline configuration.
+
+Notably, the RankNet-based approach is sufficiently generic to be applied to other decision points in \gls{atping}.
+In the past, I successfully applied it to symbol precedence recommendation \cite{DBLP:conf/cade/Bartek021}.
+
+In my presentation, I will explain the design of RankNet and its generalization DirectRanker \cite{DBLP:conf/pkdd/KoppelSWPK019},
+and describe how I applied it to clause selection and symbol precedence recommendation.
+
+\bibliographystyle{plain}
+\bibliography{main}
+
+\end{document}
